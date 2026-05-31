@@ -121,6 +121,7 @@
             padding: 20px;
             border-radius: 12px;
             border-top: 3px solid #ff0055;
+            position: relative;
         }
         .hand-header {
             display: flex;
@@ -134,6 +135,16 @@
             gap: 10px;
             flex-wrap: wrap;
             min-height: 130px;
+        }
+
+        /* Inline Flash Notice Box */
+        #game-notice {
+            color: #ff3333;
+            font-weight: bold;
+            font-size: 1.1rem;
+            margin: 10px 0;
+            min-height: 24px;
+            transition: opacity 0.3s ease;
         }
         
         /* --- CARD STYLE ENGINE --- */
@@ -203,7 +214,7 @@
         </div>
 
         <div class="player-hand-container">
-            <div class="hand-header">
+            <div id="game-notice"></div> <div class="hand-header">
                 <h3>Your Hand (<span id="hand-count">0</span> cards)</h3>
                 <button id="btn-uno" class="uno-btn">Yell UNO!</button>
             </div>
@@ -237,11 +248,23 @@
         let playerId = "";
         let isHost = false;
         let gameSession = {};
+        let noticeTimeout = null;
 
         // DOM Pointers
         const lobbyScreen = document.getElementById('lobby-screen');
         const waitingScreen = document.getElementById('waiting-screen');
         const gameScreen = document.getElementById('game-screen');
+        const gameNotice = document.getElementById('game-notice');
+
+        // Non-blocking Inline Alert Banner Function
+        function showGameNotice(msg) {
+            clearTimeout(noticeTimeout);
+            gameNotice.innerText = msg;
+            gameNotice.style.opacity = "1";
+            noticeTimeout = setTimeout(() => {
+                gameNotice.style.opacity = "0";
+            }, 3000); // Disappears by itself after 3 seconds
+        }
 
         // --- 1. DECK ENGINE GENERATOR FOR SHOW 'EM NO MERCY ---
         function buildNoMercyDeck() {
@@ -249,11 +272,11 @@
             let deck = [];
             
             colors.forEach(color => {
-                // Numbers 0-9 [cite: 87]
+                // Numbers 0-9
                 for(let i=0; i<=9; i++) {
                     deck.push({ id: `${color}_${i}`, color, value: i.toString(), type: 'number' });
                 }
-                // Custom Action Elements [cite: 58, 60, 61, 62, 65, 68]
+                // Custom Action Elements [cite: 49, 53, 58, 60, 61, 62, 65]
                 deck.push({ id: `${color}_skip`, color, value: 'Skip 🚫', type: 'action' });
                 deck.push({ id: `${color}_reverse`, color, value: 'Reverse 🔄', type: 'action' });
                 deck.push({ id: `${color}_draw2`, color, value: '+2 🃏', type: 'draw', weight: 2 });
@@ -329,7 +352,7 @@
         });
 
         document.getElementById('btn-start-game').addEventListener('click', async () => {
-            if(gameSession.playersOrder.length < 3) return alert("Minimum 3 members required to play! [cite: 8]");
+            if(gameSession.playersOrder.length < 3) return alert("Minimum 3 members required to play!");
             
             let currentDeck = [...gameSession.deck];
             let roomPlayers = { ...gameSession.players };
@@ -387,7 +410,7 @@
                 const activeId = gameSession.playersOrder[gameSession.activeTurnIndex];
                 const isMyTurn = (activeId === playerId);
                 
-                // Track accumulated stacking calculations [cite: 40, 41]
+                // Track accumulated stacking calculations
                 let turnText = isMyTurn ? "YOUR TURN! Play a card." : `Waiting for: ${gameSession.players[activeId].name}`;
                 if (gameSession.penaltyStack > 0) {
                     turnText += ` ⚠️ STACK WARNING: Draw Penalty is at +${gameSession.penaltyStack}! Play match or face the deck!`;
@@ -444,43 +467,59 @@
         async function processCardMove(card, index) {
             const topCard = gameSession.discardPile[gameSession.discardPile.length - 1];
             
-            // Stacking Override Evaluation [cite: 40]
+            // Stacking Override Evaluation [cite: 40, 73]
             if(gameSession.penaltyStack > 0 && card.type !== 'draw' && card.type !== 'wildDraw') {
-                alert("You must stack a draw penalty card or manually hit the Draw Pile! [cite: 43]");
+                showGameNotice("Wrong card! You must counter with a draw card or hit the deck.");
                 return;
             }
 
             // Standard Match Check Logic (Color, Content, or Wild status) [cite: 26]
             let isValid = (card.color === topCard.color || card.value === topCard.value || card.color === 'wild');
-            if(!isValid) return alert("Invalid card match logic applied!");
+            if(!isValid) {
+                showGameNotice("Wrong card! Attributes (color or symbols) do not match.");
+                return;
+            }
+
+            // WILD CARD COLOR CHOICE INTERACTION FIX [cite: 81]
+            let cardColorToPlay = card.color;
+            if(card.color === 'wild') {
+                let choice = prompt("Choose a Color! Type: r (Red), b (Blue), g (Green), y (Yellow)").toLowerCase().trim();
+                if(choice === 'r') cardColorToPlay = 'red';
+                else if(choice === 'b') cardColorToPlay = 'blue';
+                else if(choice === 'g') cardColorToPlay = 'green';
+                else if(choice === 'y') cardColorToPlay = 'yellow';
+                else {
+                    showGameNotice("Invalid color selected! Card play cancelled.");
+                    return;
+                }
+            }
 
             let localHand = [...gameSession.players[playerId].hand];
             localHand.splice(index, 1);
 
             let allPlayers = { ...gameSession.players };
             allPlayers[playerId].hand = localHand;
-            allPlayers[playerId].yelledUno = false; // Reset Uno call status
+            allPlayers[playerId].yelledUno = false; 
 
-            let newDiscard = [...gameSession.discardPile, card];
+            // Create played instance copy to push onto the server stack
+            let cardInstance = { ...card, color: cardColorToPlay };
+            let newDiscard = [...gameSession.discardPile, cardInstance];
+            
             let nextStack = gameSession.penaltyStack;
             let currentDir = gameSession.direction;
 
-            // Handle Draw Card Stacking Points [cite: 40, 41]
             if(card.type === 'draw' || card.type === 'wildDraw') {
                 nextStack += card.weight;
             }
 
-            // Direction Control [cite: 65]
             if(card.value.includes('Reverse')) {
                 currentDir *= -1;
             }
 
-            // Evaluate next matching index address
             let nextIdx = calculateNextActivePlayerIndex(gameSession.activeTurnIndex, currentDir, card);
 
-            // Check Instant Hand Depletion Victory Condition [cite: 37]
             if(localHand.length === 0) {
-                alert("CONGRATULATIONS! You played your final card and won! 🎉 [cite: 37]");
+                alert("CONGRATULATIONS! You played your final card and won! 🎉");
                 await updateDoc(doc(db, "rooms", currentRoomCode), { status: "ended" });
                 return;
             }
@@ -494,21 +533,23 @@
             });
         }
 
-        // Hit Draw Pile Action Function
+        // Hit Draw Pile Action Function [cite: 29]
         document.getElementById('draw-pile').addEventListener('click', async () => {
             const currentTurnId = gameSession.playersOrder[gameSession.activeTurnIndex];
-            if(currentTurnId !== playerId) return alert("Please wait for your active turn phase!");
+            if(currentTurnId !== playerId) {
+                showGameNotice("It's not your turn!");
+                return;
+            }
 
             let currentDeck = [...gameSession.deck];
             let localHand = [...gameSession.players[playerId].hand];
             let allPlayers = { ...gameSession.players };
             let nextStack = gameSession.penaltyStack;
 
-            // Resolve stacked damage penalty or run single deck hit [cite: 44]
             let totalCardsToDraw = nextStack > 0 ? nextStack : 1;
             
             if(currentDeck.length < totalCardsToDraw) {
-                alert("The deck does not have enough cards! Game cannot proceed.");
+                showGameNotice("The deck is completely empty! Game cannot proceed.");
                 return;
             }
 
@@ -517,9 +558,8 @@
             }
 
             allPlayers[playerId].hand = localHand;
-            nextStack = 0; // Reset active penalty stack pool [cite: 44]
+            nextStack = 0; 
 
-            // Step index position forward
             let nextIdx = calculateNextActivePlayerIndex(gameSession.activeTurnIndex, gameSession.direction, null);
 
             await updateDoc(doc(db, "rooms", currentRoomCode), {
@@ -530,31 +570,33 @@
             });
         });
 
-        // Yell UNO Verification Action
+        // Yell UNO Verification Action [cite: 33]
         document.getElementById('btn-uno').addEventListener('click', async () => {
-            if(gameSession.players[playerId].hand.length !== 1) return alert("You can only call UNO when holding exactly 1 card! [cite: 34]");
+            if(gameSession.players[playerId].hand.length !== 1) {
+                showGameNotice("You can only call UNO when holding exactly 1 card!");
+                return;
+            }
             
             let allPlayers = { ...gameSession.players };
             allPlayers[playerId].yelledUno = true;
             
             await updateDoc(doc(db, "rooms", currentRoomCode), { players: allPlayers });
-            alert("You successfully shouted UNO! 📢 [cite: 34]");
+            showGameNotice("You successfully shouted UNO! 📢");
         });
 
-        // Handle Index Jump Step Operations (Skipping logic implementation)
+        // Handle Index Jump Step Operations [cite: 61, 68]
         function calculateNextActivePlayerIndex(currentIndex, currentDir, card) {
             let totalPlayers = gameSession.playersOrder.length;
             let step = currentDir;
 
             if(card && card.value.includes('Skip 🚫')) {
-                step = currentDir * 2; // Jump across next sequence pointer [cite: 61]
+                step = currentDir * 2; 
             } else if (card && card.value.includes('Skip All 💥')) {
-                return currentIndex; // Return action right back to issuer [cite: 68]
+                return currentIndex; 
             }
 
             let candidateIndex = (currentIndex + step + totalPlayers) % totalPlayers;
             
-            // Loop iteration safety sweep to skip any already-eliminated players
             while(gameSession.players[gameSession.playersOrder[candidateIndex]].status === "eliminated") {
                 candidateIndex = (candidateIndex + currentDir + totalPlayers) % totalPlayers;
             }
@@ -564,7 +606,7 @@
         async function triggerMercyElimination() {
             let allPlayers = { ...gameSession.players };
             allPlayers[playerId].status = "eliminated";
-            alert("MERCY ELIMINATION RULE TRIGGERED! You crossed 25 cards and are out of the game! [cite: 45]");
+            alert("MERCY ELIMINATION RULE TRIGGERED! You crossed 25 cards and are out of the game!");
             
             let nextIdx = calculateNextActivePlayerIndex(gameSession.activeTurnIndex, gameSession.direction, null);
 
