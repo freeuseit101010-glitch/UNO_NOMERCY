@@ -392,6 +392,7 @@
         }
 
         // --- 4. GRAPHICS RENDERING PIPELINE ---
+        // --- 4. GRAPHICS RENDERING PIPELINE ---
         function renderPipeline() {
             document.getElementById('display-room-code').innerText = gameSession.roomCode;
             document.getElementById('player-count').innerText = gameSession.playersOrder.length;
@@ -423,16 +424,30 @@
                 discardDiv.className = `card-deck card ${topCard.color}`;
                 discardDiv.innerHTML = `<strong>${topCard.value}</strong>`;
 
-                // Update Status Panels of other players
+                // Update Status Panels of other players (Modified to display cards)
                 const oppArea = document.getElementById('opponents-area');
                 oppArea.innerHTML = "";
                 gameSession.playersOrder.forEach(pId => {
                     if(pId !== playerId) {
                         const info = gameSession.players[pId];
                         const isHisTurn = (pId === activeId);
+                        
+                        // Generate HTML string for opponent's actual cards
+                        let opponentCardsHTML = '<div style="display: flex; gap: 4px; justify-content: center; margin-top: 8px; flex-wrap: wrap;">';
+                        info.hand.forEach(card => {
+                            // Render mini versions of the cards
+                            opponentCardsHTML += `
+                                <div class="card ${card.color}" style="width: 45px; height: 65px; font-size: 0.6rem; padding: 2px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.3); pointer-events: none;">
+                                    <span>${card.value}</span>
+                                </div>
+                            `;
+                        });
+                        opponentCardsHTML += '</div>';
+
                         oppArea.innerHTML += `
-                            <div class="opponent-status ${isHisTurn ? 'active-turn' : ''} ${info.status === 'eliminated' ? 'eliminated' : ''}">
+                            <div class="opponent-status ${isHisTurn ? 'active-turn' : ''} ${info.status === 'eliminated' ? 'eliminated' : ''}" style="min-width: 150px;">
                                 <strong>${info.name}</strong>: ${info.hand.length} Cards ${info.yelledUno ? '📢 (UNO!)' : ''}
+                                ${info.status !== 'eliminated' ? opponentCardsHTML : ''}
                             </div>
                         `;
                     }
@@ -444,7 +459,7 @@
                 const localHand = gameSession.players[playerId].hand;
                 document.getElementById('hand-count').innerText = localHand.length;
 
-                // 25 Cards Mercy Elimination check [cite: 45]
+                // 25 Cards Mercy Elimination check
                 if(localHand.length >= 25 && gameSession.players[playerId].status === "active") {
                     triggerMercyElimination();
                     return;
@@ -462,7 +477,6 @@
                 });
             }
         }
-
         // --- 5. ACTION SYSTEM RULES EXECUTION ENGINE ---
         async function processCardMove(card, index) {
             const topCard = gameSession.discardPile[gameSession.discardPile.length - 1];
