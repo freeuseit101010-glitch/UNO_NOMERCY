@@ -424,7 +424,7 @@
                 discardDiv.className = `card-deck card ${topCard.color}`;
                 discardDiv.innerHTML = `<strong>${topCard.value}</strong>`;
 
-                // Update Status Panels of other players (Modified to display cards)
+                // Update Status Panels of other players (Displays hidden card backs)
                 const oppArea = document.getElementById('opponents-area');
                 oppArea.innerHTML = "";
                 gameSession.playersOrder.forEach(pId => {
@@ -432,20 +432,20 @@
                         const info = gameSession.players[pId];
                         const isHisTurn = (pId === activeId);
                         
-                        // Generate HTML string for opponent's actual cards
-                        let opponentCardsHTML = '<div style="display: flex; gap: 4px; justify-content: center; margin-top: 8px; flex-wrap: wrap;">';
-                        info.hand.forEach(card => {
-                            // Render mini versions of the cards
+                        // Generate visual card backs for the opponent's hand
+                        let opponentCardsHTML = '<div style="display: flex; gap: -15px; justify-content: center; margin-top: 10px; flex-wrap: wrap; padding: 0 10px;">';
+                        info.hand.forEach(() => {
+                            // Renders a strict "No Mercy" black/magenta card back
                             opponentCardsHTML += `
-                                <div class="card ${card.color}" style="width: 45px; height: 65px; font-size: 0.6rem; padding: 2px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.3); pointer-events: none;">
-                                    <span>${card.value}</span>
+                                <div class="card" style="width: 40px; height: 60px; background: #0b0b0d; border: 2px solid #ff0055; color: #ff0055; font-size: 0.5rem; padding: 2px; border-radius: 5px; box-shadow: -2px 2px 4px rgba(0,0,0,0.5); pointer-events: none; display: flex; flex-direction: column; justify-content: center; align-items: center; font-weight: bold; font-family: sans-serif;">
+                                    <span style="transform: rotate(-20deg); font-size: 0.55rem; letter-spacing: 0.5px;">UNO</span>
                                 </div>
                             `;
                         });
                         opponentCardsHTML += '</div>';
 
                         oppArea.innerHTML += `
-                            <div class="opponent-status ${isHisTurn ? 'active-turn' : ''} ${info.status === 'eliminated' ? 'eliminated' : ''}" style="min-width: 150px;">
+                            <div class="opponent-status ${isHisTurn ? 'active-turn' : ''} ${info.status === 'eliminated' ? 'eliminated' : ''}" style="min-width: 160px; max-width: 240px;">
                                 <strong>${info.name}</strong>: ${info.hand.length} Cards ${info.yelledUno ? '📢 (UNO!)' : ''}
                                 ${info.status !== 'eliminated' ? opponentCardsHTML : ''}
                             </div>
