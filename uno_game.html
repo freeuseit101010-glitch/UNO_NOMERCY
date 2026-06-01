@@ -397,6 +397,7 @@
             document.getElementById('display-room-code').innerText = gameSession.roomCode;
             document.getElementById('player-count').innerText = gameSession.playersOrder.length;
 
+            // --- STATE: WAITING IN LOBBY ---
             if (gameSession.status === "waiting") {
                 const list = document.getElementById('player-list');
                 list.innerHTML = "";
@@ -405,26 +406,55 @@
                 });
             }
 
+            // --- STATE: GAME OVER / MATCH ENDED ---
+            if (gameSession.status === "ended") {
+                switchView(gameScreen);
+                
+                // Find the glorious winner
+                let winnerName = "Someone";
+                Object.keys(gameSession.players).forEach(pId => {
+                    if (gameSession.players[pId].hand.length === 0) {
+                        winnerName = gameSession.players[pId].name;
+                    }
+                });
+
+                // Overwrite turn indicator and clear the table board cleanly
+                document.getElementById('turn-indicator').innerHTML = `🎉 <strong>GAME OVER! ${winnerName.toUpperCase()} HAS WON THE MATCH!</strong> 🎉`;
+                document.getElementById('opponents-area').innerHTML = `<h3>Thank you for playing UNO: No Mercy!</h3>`;
+                document.getElementById('player-hand').innerHTML = "";
+                
+                // Disable drawing interaction entirely
+                document.getElementById('draw-pile').onclick = null;
+                return; // Stop processing further game ticks
+            }
+
+            // --- STATE: ACTIVE MATCH PLAYING ---
             if (gameSession.status === "playing") {
                 switchView(gameScreen);
                 
                 const activeId = gameSession.playersOrder[gameSession.activeTurnIndex];
                 const isMyTurn = (activeId === playerId);
+                const iAmEliminated = (gameSession.players[playerId].status === "eliminated");
                 
-                // Track accumulated stacking calculations
-                let turnText = isMyTurn ? "YOUR TURN! Play a card." : `Waiting for: ${gameSession.players[activeId].name}`;
-                if (gameSession.penaltyStack > 0) {
-                    turnText += ` ⚠️ STACK WARNING: Draw Penalty is at +${gameSession.penaltyStack}! Play match or face the deck!`;
+                // 1. Build Turn Indicator Text
+                let turnText = "";
+                if (iAmEliminated) {
+                    turnText = `👻 SPECTATOR MODE: You were eliminated. Watching: ${gameSession.players[activeId].name}`;
+                } else {
+                    turnText = isMyTurn ? "YOUR TURN! Play a card." : `Waiting for: ${gameSession.players[activeId].name}`;
+                    if (gameSession.penaltyStack > 0) {
+                        turnText += ` ⚠️ STACK WARNING: Draw Penalty is at +${gameSession.penaltyStack}! Play match or face the deck!`;
+                    }
                 }
                 document.getElementById('turn-indicator').innerText = turnText;
 
-                // Update Discard Pile Card Graphics
+                // 2. Update Discard Pile Card Graphics
                 const topCard = gameSession.discardPile[gameSession.discardPile.length - 1];
                 const discardDiv = document.getElementById('discard-pile');
                 discardDiv.className = `card-deck card ${topCard.color}`;
                 discardDiv.innerHTML = `<strong>${topCard.value}</strong>`;
 
-                // Update Status Panels of other players (Displays hidden card backs)
+                // 3. Update Status Panels of other players
                 const oppArea = document.getElementById('opponents-area');
                 oppArea.innerHTML = "";
                 gameSession.playersOrder.forEach(pId => {
@@ -432,12 +462,11 @@
                         const info = gameSession.players[pId];
                         const isHisTurn = (pId === activeId);
                         
-                        // Generate visual card backs for the opponent's hand
+                        // Generate visual card backs for the opponent's hand if active
                         let opponentCardsHTML = '<div style="display: flex; gap: -15px; justify-content: center; margin-top: 10px; flex-wrap: wrap; padding: 0 10px;">';
                         info.hand.forEach(() => {
-                            // Renders a strict "No Mercy" black/magenta card back
                             opponentCardsHTML += `
-                                <div class="card" style="width: 40px; height: 60px; background: #0b0b0d; border: 2px solid #ff0055; color: #ff0055; font-size: 0.5rem; padding: 2px; border-radius: 5px; box-shadow: -2px 2px 4px rgba(0,0,0,0.5); pointer-events: none; display: flex; flex-direction: column; justify-content: center; align-items: center; font-weight: bold; font-family: sans-serif;">
+                                <div class="card" style="width: 40px; height: 60px; background: #0b0b0d; border: 2px solid #ff0055; color: #ff0055; font-size: 0.5rem; padding: 2px; border-radius: 5px; box-shadow: -2px 2px 4px rgba(0,0,0,0.5); pointer-events: none; display: flex; flex-direction: column; justify-content: center; align-items: center; font-weight: bold;">
                                     <span style="transform: rotate(-20deg); font-size: 0.55rem; letter-spacing: 0.5px;">UNO</span>
                                 </div>
                             `;
@@ -446,14 +475,14 @@
 
                         oppArea.innerHTML += `
                             <div class="opponent-status ${isHisTurn ? 'active-turn' : ''} ${info.status === 'eliminated' ? 'eliminated' : ''}" style="min-width: 160px; max-width: 240px;">
-                                <strong>${info.name}</strong>: ${info.hand.length} Cards ${info.yelledUno ? '📢 (UNO!)' : ''}
+                                <strong>${info.name}</strong>: ${info.status === 'eliminated' ? 'DEAD ❌' : info.hand.length + ' Cards'} ${info.yelledUno ? '📢 (UNO!)' : ''}
                                 ${info.status !== 'eliminated' ? opponentCardsHTML : ''}
                             </div>
                         `;
                     }
                 });
 
-                // Display Client Hand Graphics
+                // 4. Display Client Hand Graphics
                 const handContainer = document.getElementById('player-hand');
                 handContainer.innerHTML = "";
                 const localHand = gameSession.players[playerId].hand;
@@ -465,16 +494,22 @@
                     return;
                 }
 
-                localHand.forEach((card, index) => {
-                    const cardEl = document.createElement('div');
-                    cardEl.className = `card ${card.color}`;
-                    cardEl.innerHTML = `<span>${card.value}</span>`;
-                    
-                    if(isMyTurn && gameSession.players[playerId].status === "active") {
-                        cardEl.onclick = () => processCardMove(card, index);
-                    }
-                    handContainer.appendChild(cardEl);
-                });
+                // Render hand if the player is alive; if dead, show elimination text
+                if (iAmEliminated) {
+                    handContainer.innerHTML = `<div style="color: #ff3333; font-weight: bold; font-size: 1.2rem; margin: 20px 0;">❌ YOU HAVE BEEN ELIMINATED BY MERCY RULE ❌</div>`;
+                } else {
+                    localHand.forEach((card, index) => {
+                        const cardEl = document.createElement('div');
+                        cardEl.className = `card ${card.color}`;
+                        cardEl.innerHTML = `<span>${card.value}</span>`;
+                        
+                        // Only let them click if it's their turn AND they are not dead
+                        if(isMyTurn) {
+                            cardEl.onclick = () => processCardMove(card, index);
+                        }
+                        handContainer.appendChild(cardEl);
+                    });
+                }
             }
         }
         // --- 5. ACTION SYSTEM RULES EXECUTION ENGINE ---
