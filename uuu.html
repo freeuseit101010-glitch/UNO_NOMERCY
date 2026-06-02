@@ -392,6 +392,7 @@
         }
 
         // --- 4. GRAPHICS RENDERING PIPELINE ---
+        // --- 4. GRAPHICS RENDERING PIPELINE ---
         function renderPipeline() {
             document.getElementById('display-room-code').innerText = gameSession.roomCode;
             document.getElementById('player-count').innerText = gameSession.playersOrder.length;
@@ -405,20 +406,35 @@
                 });
             }
 
+            // --- DEEP CHECK: LAST MAN STANDING DETECTION ---
+            if (gameSession.status === "playing") {
+                let activePlayers = gameSession.playersOrder.filter(pId => gameSession.players[pId].status === "active");
+                if (activePlayers.length === 1 && gameSession.status !== "ended") {
+                    // Force state transition to ended locally to prevent layout flickering
+                    gameSession.status = "ended"; 
+                }
+            }
+
             // --- STATE: GAME OVER / MATCH ENDED ---
             if (gameSession.status === "ended") {
                 switchView(gameScreen);
                 
-                // Find the glorious winner
+                // Find the glorious winner (Either 0 cards OR the only survivor left alive)
                 let winnerName = "Someone";
-                Object.keys(gameSession.players).forEach(pId => {
-                    if (gameSession.players[pId].hand.length === 0) {
-                        winnerName = gameSession.players[pId].name;
-                    }
-                });
+                let survivor = gameSession.playersOrder.filter(pId => gameSession.players[pId].status === "active");
+                
+                if (survivor.length === 1) {
+                    winnerName = gameSession.players[survivor[0]].name;
+                } else {
+                    Object.keys(gameSession.players).forEach(pId => {
+                        if (gameSession.players[pId].hand.length === 0) {
+                            winnerName = gameSession.players[pId].name;
+                        }
+                    });
+                }
 
                 // Overwrite turn indicator and clear the table board cleanly
-                document.getElementById('turn-indicator').innerHTML = `🎉 <strong>GAME OVER! ${winnerName.toUpperCase()} HAS WON THE MATCH!</strong> 🎉`;
+                document.getElementById('turn-indicator').innerHTML = `🎉 <strong>GAME OVER! ${winnerName.toUpperCase()} IS THE LAST SURVIVOR AND WINS THE MATCH!</strong> 🎉`;
                 document.getElementById('opponents-area').innerHTML = `<h3>Thank you for playing UNO: No Mercy!</h3>`;
                 document.getElementById('player-hand').innerHTML = "";
                 
@@ -513,49 +529,101 @@
         }
 
         // --- 5. ACTION SYSTEM RULES EXECUTION ENGINE ---
+        // --- 5. ACTION SYSTEM RULES EXECUTION ENGINE ---
         async function processCardMove(card, index) {
             const topCard = gameSession.discardPile[gameSession.discardPile.length - 1];
             
-            // Stacking Override Evaluation
+            // 1. Stacking Override Evaluation (Crucial for No Mercy Stacking Rules)
             if(gameSession.penaltyStack > 0 && card.type !== 'draw' && card.type !== 'wildDraw') {
-                showGameNotice("Wrong card! You must counter with a draw card or hit the deck.");
+                showGameNotice("Wrong card! You must counter with a stacking draw card or hit the deck.");
                 return;
             }
 
-            // Standard Match Check Logic (Color, Content, or Wild status)
-            let isValid = (card.color === topCard.color || card.value === topCard.value || card.color === 'wild');
+            // 2. Standard Match Check Logic (Deep Fixed to explicitly allow Wild play on top of assigned colors)
+            let isValid = (card.color === topCard.color || card.value === topCard.value || card.color === 'wild' || topCard.color === 'wild');
             if(!isValid) {
                 showGameNotice("Wrong card! Attributes (color or symbols) do not match.");
                 return;
             }
 
-            // WILD CARD COLOR CHOICE INTERACTION FIX
-            let cardColorToPlay = card.color;
-            if(card.color === 'wild') {
-                let choice = prompt("Choose a Color! Type: r (Red), b (Blue), g (Green), y (Yellow)").toLowerCase().trim();
-                if(choice === 'r') cardColorToPlay = 'red';
-                else if(choice === 'b') cardColorToPlay = 'blue';
-                else if(choice === 'g') cardColorToPlay = 'green';
-                else if(choice === 'y') cardColorToPlay = 'yellow';
-                else {
-                    showGameNotice("Invalid color selected! Card play cancelled.");
-                    return;
-                }
-            }
-
+            // 3. Setup mutable operational states
             let localHand = [...gameSession.players[playerId].hand];
             let allPlayers = { ...gameSession.players };
             let newDiscard = [...gameSession.discardPile];
             
             let nextStack = gameSession.penaltyStack;
             let currentDir = gameSession.direction;
+            let activeColorSelection = card.color;
 
-            // --- CUSTOM LOGIC: DISCARD ALL 💣 ---
+            // Remove the card from the player's hand array up-front
+            localHand.splice(index, 1);
+
+            // --- DEEP IMPLEMENTATION: ROULETTE WHEEL ENGINE 🎡 ---
+            if (card.type === 'roulette') {
+                // Determine victims still alive inside the room boundary
+                let targets = gameSession.playersOrder.filter(pId => pId !== playerId && allPlayers[pId].status !== 'eliminated');
+                
+                if (targets.length > 0) {
+                    let promptMsg = "🎡 ROULETTE! Choose an opponent to spin the wheel:\n";
+                    targets.forEach((pId, idx) => {
+                        promptMsg += `${idx + 1}. ${allPlayers[pId].name} (${allPlayers[pId].hand.length} cards)\n`;
+                    });
+                    
+                    let choiceIdx = parseInt(prompt(promptMsg), 10) - 1;
+                    if (!isNaN(choiceIdx) && choiceIdx >= 0 && choiceIdx < targets.length) {
+                        let targetPlayerId = targets[choiceIdx];
+                        let targetHand = [...allPlayers[targetPlayerId].hand];
+                        let serverDeck = [...gameSession.deck];
+                        
+                        // Prompt player for a target color the victim has to draw for
+                        let targetColorChoice = prompt("Choose the trigger color for the Roulette! Type: r (Red), b (Blue), g (Green), y (Yellow)").toLowerCase().trim();
+                        let triggerColor = 'red';
+                        if(targetColorChoice === 'b') triggerColor = 'blue';
+                        else if(targetColorChoice === 'g') triggerColor = 'green';
+                        else if(targetColorChoice === 'y') triggerColor = 'yellow';
+
+                        alert(`Roulette activated! ${allPlayers[targetPlayerId].name} will draw cards until they pull a ${triggerColor.toUpperCase()} card!`);
+                        
+                        let matched = false;
+                        let cardsDrawnCount = 0;
+
+                        // Draw cycle simulation loop
+                        while (!matched && serverDeck.length > 0) {
+                            let drawnCard = serverDeck.pop();
+                            targetHand.push(drawnCard);
+                            cardsDrawnCount++;
+
+                            if (drawnCard.color === triggerColor) {
+                                matched = true;
+                            }
+
+                            // Dynamic check: Did the continuous draw push them into Mercy Elimination?
+                            if (targetHand.length >= 25) {
+                                break;
+                            }
+                        }
+
+                        // Apply the modified hand back to the server profile instance
+                        allPlayers[targetPlayerId].hand = targetHand;
+                        gameSession.deck = serverDeck; // Synchronize local cache reference
+
+                        if (targetHand.length >= 25) {
+                            allPlayers[targetPlayerId].status = "eliminated";
+                            alert(`💥 ROULETTE DEADSHOT! ${allPlayers[targetPlayerId].name} drew ${cardsDrawnCount} cards, hit ${targetHand.length} total cards, and was ELIMINATED!`);
+                        } else {
+                            alert(`Roulette finished! ${allPlayers[targetPlayerId].name} drew ${cardsDrawnCount} cards before finding a match.`);
+                        }
+                    } else {
+                        showGameNotice("Invalid player choice. Roulette skipped!");
+                    }
+                }
+            }
+
+            // --- DEEP IMPLEMENTATION: DISCARD ALL 💣 ---
             if (card.type === 'discardAll') {
                 const targetColor = card.color;
-                localHand.splice(index, 1); 
-                
                 let cardsToKeep = [];
+                
                 localHand.forEach(c => {
                     if (c.color === targetColor) {
                         newDiscard.push({ ...c }); 
@@ -564,24 +632,15 @@
                     }
                 });
                 
-                newDiscard.push({ ...card });
                 localHand = cardsToKeep;
-                
-            } else {
-                localHand.splice(index, 1);
-                let cardInstance = { ...card, color: cardColorToPlay };
-                newDiscard.push(cardInstance);
             }
 
-            allPlayers[playerId].hand = localHand;
-            allPlayers[playerId].yelledUno = false;
-
-            // --- CUSTOM LOGIC: 7 SWAP 🔃 ---
+            // --- DEEP IMPLEMENTATION: 7 SWAP ENGINE 🔃 ---
             if (card.type === 'swap7') {
                 let opponents = gameSession.playersOrder.filter(pId => pId !== playerId && allPlayers[pId].status !== 'eliminated');
                 
                 if (opponents.length > 0) {
-                    let promptMsg = "Choose a player to swap hands with:\n";
+                    let promptMsg = "🔃 7 SWAP! Choose a player to swap hands with:\n";
                     opponents.forEach((pId, idx) => {
                         promptMsg += `${idx + 1}. ${allPlayers[pId].name} (${allPlayers[pId].hand.length} cards)\n`;
                     });
@@ -590,41 +649,70 @@
                     if (!isNaN(choiceIdx) && choiceIdx >= 0 && choiceIdx < opponents.length) {
                         let targetPlayerId = opponents[choiceIdx];
                         
-                        let myNewHand = [...allPlayers[targetPlayerId].hand];
-                        let theirNewHand = [...localHand];
+                        // Deep isolate snapshot copies for execution swap
+                        let targetHandSnapshot = [...allPlayers[targetPlayerId].hand];
+                        let myHandSnapshot = [...localHand];
                         
-                        allPlayers[playerId].hand = myNewHand;
-                        allPlayers[targetPlayerId].hand = theirNewHand;
+                        allPlayers[playerId].hand = targetHandSnapshot;
+                        allPlayers[targetPlayerId].hand = myHandSnapshot;
                         
-                        localHand = myNewHand; 
-                        alert(`Swapped hands with ${allPlayers[targetPlayerId].name}!`);
+                        // Force update working variables immediately so win evaluations catch it
+                        localHand = targetHandSnapshot; 
+                        alert(`Hands swapped successfully! You now have ${localHand.length} cards.`);
                     } else {
-                        showGameNotice("Invalid player choice selected! Defaulting to no swap execution.");
+                        showGameNotice("Invalid choice. Swapping skipped!");
                     }
                 }
             }
 
-            // Calculation weights for Penalties & Direction Modifiers
+            // --- DEEP IMPLEMENTATION: WILD CARD COLOR SELECTION & REVERSE INTERACTION ---
+            if (card.color === 'wild') {
+                let choice = prompt("Choose a Color! Type: r (Red), b (Blue), g (Green), y (Yellow)").toLowerCase().trim();
+                if(choice === 'r') activeColorSelection = 'red';
+                else if(choice === 'b') activeColorSelection = 'blue';
+                else if(choice === 'g') activeColorSelection = 'green';
+                else if(choice === 'y') activeColorSelection = 'yellow';
+                else {
+                    showGameNotice("Invalid selection! Falling back to Red.");
+                    activeColorSelection = 'red';
+                }
+            }
+
+            // Apply modifications to active player state instance blueprints
+            allPlayers[playerId].hand = localHand;
+            allPlayers[playerId].yelledUno = false;
+
+            // Commit final card design values directly to discard stack
+            let finalizedCardInstance = { ...card, color: activeColorSelection };
+            newDiscard.push(finalizedCardInstance);
+
+            // Calculation adjustments for stacking draws
             if(card.type === 'draw' || card.type === 'wildDraw') {
                 nextStack += card.weight;
             }
 
-            if(card.value.includes('Reverse')) {
+            // Handle standard direction swaps AND Wild Reverse +4 modifications
+            if(card.value.includes('Reverse') || card.id.includes('wild_rev4')) {
                 currentDir *= -1;
             }
 
-            // Determine turn migration index pointer
+            // Move the turn marker accurately to the next viable candidate
             let nextIdx = calculateNextActivePlayerIndex(gameSession.activeTurnIndex, currentDir, card);
 
-            // Win condition evaluator check
+            // Final check: Did the move cause a win condition right now?
             if(localHand.length === 0) {
                 alert(`CONGRATULATIONS! ${allPlayers[playerId].name} played their final card and won! 🎉`);
-                await updateDoc(doc(db, "rooms", currentRoomCode), { status: "ended" });
+                await updateDoc(doc(db, "rooms", currentRoomCode), { 
+                    status: "ended",
+                    discardPile: newDiscard,
+                    players: allPlayers
+                });
                 return;
             }
 
-            // Global State Database Synchronization Write
+            // Global Write State updates to Cloud Firestore database
             await updateDoc(doc(db, "rooms", currentRoomCode), {
+                deck: gameSession.deck,
                 discardPile: newDiscard,
                 players: allPlayers,
                 activeTurnIndex: nextIdx,
@@ -720,18 +808,7 @@
             return candidateIndex;
         }
 
-        async function triggerMercyElimination() {
-            let allPlayers = { ...gameSession.players };
-            allPlayers[playerId].status = "eliminated";
-            alert("MERCY ELIMINATION RULE TRIGGERED! You crossed 25 cards and are out of the game!");
-            
-            let nextIdx = calculateNextActivePlayerIndex(gameSession.activeTurnIndex, gameSession.direction, null);
-
-            await updateDoc(doc(db, "rooms", currentRoomCode), { 
-                players: allPlayers,
-                activeTurnIndex: nextIdx
-            });
-        }
+        triggerMercyElimination
     </script>
 </body>
 </html>
