@@ -259,29 +259,38 @@
             }, 3000);
         }
 
+        // --- 1. DECK ENGINE GENERATOR FOR SHOW 'EM NO MERCY (DOUBLED DECK - 168 CARDS) ---
         function buildNoMercyDeck() {
             const colors = ['red', 'blue', 'green', 'yellow'];
             let deck = [];
             
-            colors.forEach(color => {
-                for(let i=0; i<=9; i++) {
-                    deck.push({ id: `${color}_${i}`, color, value: i.toString(), type: 'number' });
-                }
-                deck.push({ id: `${color}_skip`, color, value: 'Skip 🚫', type: 'action' });
-                deck.push({ id: `${color}_reverse`, color, value: 'Reverse 🔄', type: 'action' });
-                deck.push({ id: `${color}_draw2`, color, value: '+2 🃏', type: 'draw', weight: 2 });
-                deck.push({ id: `${color}_draw4`, color, value: '+4 🃏', type: 'draw', weight: 4 });
-                deck.push({ id: `${color}_discardAll`, color, value: 'Discard All 💣', type: 'discardAll' });
-                deck.push({ id: `${color}_skipEvery`, color, value: 'Skip All 💥', type: 'skipEveryone' });
-                deck.push({ id: `${color}_swap7`, color, value: '7 Swap 🔃', type: 'swap7' });
-            });
+            // Run the entire generation block TWICE to create two identical sets of cards
+            for (let set = 1; set <= 2; set++) {
+                colors.forEach(color => {
+                    // Numbers 0-9
+                    for(let i=0; i<=9; i++) {
+                        deck.push({ id: `${color}_${i}_set${set}`, color, value: i.toString(), type: 'number' });
+                    }
+                    // Custom Action Elements
+                    deck.push({ id: `${color}_skip_set${set}`, color, value: 'Skip 🚫', type: 'action' });
+                    deck.push({ id: `${color}_reverse_set${set}`, color, value: 'Reverse 🔄', type: 'action' });
+                    deck.push({ id: `${color}_draw2_set${set}`, color, value: '+2 🃏', type: 'draw', weight: 2 });
+                    deck.push({ id: `${color}_draw4_set${set}`, color, value: '+4 🃏', type: 'draw', weight: 4 });
+                    deck.push({ id: `${color}_discardAll_set${set}`, color, value: 'Discard All 💣', type: 'discardAll' });
+                    deck.push({ id: `${color}_skipEvery_set${set}`, color, value: 'Skip All 💥', type: 'skipEveryone' });
+                    deck.push({ id: `${color}_swap7_set${set}`, color, value: '7 Swap 🔃', type: 'swap7' });
+                });
 
-            for(let i=0; i<4; i++) {
-                deck.push({ id: `wild_rev4_${i}`, color: 'wild', value: 'Wild Rev +4 🔄', type: 'wildDraw', weight: 4 });
-                deck.push({ id: `wild_d6_${i}`, color: 'wild', value: 'Wild +6 💀', type: 'wildDraw', weight: 6 });
-                deck.push({ id: `wild_d10_${i}`, color: 'wild', value: 'Wild +10 ❌', type: 'wildDraw', weight: 10 });
-                deck.push({ id: `wild_roul_${i}`, color: 'wild', value: 'Roulette 🎡', type: 'roulette' });
+                // Extreme Wild Additions
+                for(let i=0; i<4; i++) {
+                    deck.push({ id: `wild_rev4_${i}_set${set}`, color: 'wild', value: 'Wild Rev +4 🔄', type: 'wildDraw', weight: 4 });
+                    deck.push({ id: `wild_d6_${i}_set${set}`, color: 'wild', value: 'Wild +6 💀', type: 'wildDraw', weight: 6 });
+                    deck.push({ id: `wild_d10_${i}_set${set}`, color: 'wild', value: 'Wild +10 ❌', type: 'wildDraw', weight: 10 });
+                    deck.push({ id: `wild_roul_${i}_set${set}`, color: 'wild', value: 'Roulette 🎡', type: 'roulette' });
+                }
             }
+            
+            // Randomize and return the entire 168-card super deck
             return deck.sort(() => Math.random() - 0.5);
         }
 
