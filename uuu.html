@@ -517,13 +517,16 @@
 
             localHand.splice(index, 1);
 
+            // Handle normal and wild reverse direction alterations before moving forward
+            if(card.value.includes('Reverse') || card.id.includes('wild_rev4')) {
+                currentDir *= -1;
+            }
+
             // --- DEEP IMPLEMENTATION: AUTOMATIC NEXT-PLAYER ROULETTE WHEEL ENGINE ---
             if (card.type === 'roulette') {
-                // Determine next player index dynamically based on current game direction
                 let totalPlayers = gameSession.playersOrder.length;
                 let targetIdx = (gameSession.activeTurnIndex + currentDir + totalPlayers) % totalPlayers;
                 
-                // Skip eliminated opponents to find the next active survivor
                 while(allPlayers[gameSession.playersOrder[targetIdx]].status === "eliminated") {
                     targetIdx = (targetIdx + currentDir + totalPlayers) % totalPlayers;
                 }
@@ -630,10 +633,7 @@
                 nextStack += card.weight;
             }
 
-            if(card.value.includes('Reverse') || card.id.includes('wild_rev4')) {
-                currentDir *= -1;
-            }
-
+            // Target calculation engine pass
             let nextIdx = calculateNextActivePlayerIndex(gameSession.activeTurnIndex, currentDir, card);
 
             if(localHand.length === 0) {
@@ -646,7 +646,6 @@
                 return;
             }
 
-            // --- IMMEDIATE RE-EVALUATION FOR LAST MAN STANDING ON ROULETTE DEATH ---
             let remainingActivePlayers = gameSession.playersOrder.filter(pId => allPlayers[pId].status === "active");
             let nextStatus = "playing";
             if (remainingActivePlayers.length === 1) {
@@ -707,7 +706,6 @@
             allPlayers[playerId].hand = localHand;
             nextStack = 0; 
 
-            // --- DEEP INTERCEPT FOR IMMEDIATE 25-CARD EXPULSION ON DRAW ---
             let nextStatus = "playing";
             if (localHand.length >= 25) {
                 allPlayers[playerId].status = "eliminated";
@@ -720,6 +718,7 @@
                 }
             }
 
+            // Always calculate next turn index pass using active layout state variables directly
             let nextIdx = calculateNextActivePlayerIndex(gameSession.activeTurnIndex, gameSession.direction, null);
 
             await updateDoc(doc(db, "rooms", currentRoomCode), {
@@ -757,7 +756,6 @@
 
             let candidateIndex = (currentIndex + step + totalPlayers) % totalPlayers;
             
-            // Safety loop to bypass dead players
             let loopGuard = 0;
             while(gameSession.players[gameSession.playersOrder[candidateIndex]].status === "eliminated" && loopGuard < totalPlayers) {
                 candidateIndex = (candidateIndex + currentDir + totalPlayers) % totalPlayers;
