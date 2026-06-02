@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UNO Show 'Em No Mercy - Online Multiplayer</title>
+    <style>
+        /* --- APPLICATION STYLES --- */
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0f0f12;
+            color: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .screen {
+            width: 100%;
+            max-width: 800px;
+            padding: 30px;
+            text-align: center;
+            background: #16161a;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            box-sizing: border-box;
+        }
+        .hidden { display: none !important; }
+        h1 { font-size: 2.5rem; color: #ff0055; margin-bottom: 5px; }
+        h2 { font-size: 1.8rem; margin-top: 5px; }
+        .subtitle { color: #888; font-style: italic; margin-bottom: 30px; }
+        
+        .form-group {
+            margin: 25px 0;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+        input {
+            padding: 12px 20px;
+            font-size: 16px;
+            border-radius: 8px;
+            border: 2px solid #333;
+            background: #222;
+            color: #fff;
+            width: 200px;
+            outline: none;
+        }
+        input:focus { border-color: #ff0055; }
+        
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            background-color: #ff0055;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+        }
+        button:hover { background-color: #e6004c; transform: translateY(-1px); }
+        button:active { transform: translateY(1px); }
+        hr { border: 0; border-top: 1px solid #333; margin: 30px 0; }
+
+        ul { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+        li { background: #222; padding: 10px 20px; border-radius: 5px; width: 50%; border-left: 4px solid #ff0055; }
+
+        /* --- GAME BOARD STYLES --- */
+        #turn-indicator {
+            font-size: 1.4rem;
+            font-weight: bold;
+            background: #222;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #444;
+        }
+        .table-center {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin: 30px 0;
+        }
+        .card-deck {
+            width: 110px;
+            height: 160px;
+            border: 3px solid #fff;
+            border-radius: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 1.1rem;
+            background-color: #2c2c35;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+            user-select: none;
+        }
+        #draw-pile { cursor: pointer; background: repeating-linear-gradient(45deg, #111, #111 10px, #222 10px, #222 20px); }
+        
+        #opponents-area {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        .opponent-status {
+            background: #222;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            border: 1px solid #333;
+        }
+        .opponent-status.active-turn { border-color: #00ff66; background: #152a1d; }
+        .opponent-status.eliminated { border-color: #ff3333; opacity: 0.5; text-decoration: line-through; }
+
+        .player-hand-container {
+            background: #1a1a24;
+            padding: 20px;
+            border-radius: 12px;
+            border-top: 3px solid #ff0055;
+            position: relative;
+        }
+        .hand-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .hand-cards {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            min-height: 130px;
+        }
+
+        /* Inline Flash Notice Box */
+        #game-notice {
+            color: #ff3333;
+            font-weight: bold;
+            font-size: 1.1rem;
+            margin: 10px 0;
+            min-height: 24px;
+            transition: opacity 0.3s ease;
+        }
+        
+        /* --- CARD STYLE ENGINE --- */
+        .card {
+            width: 85px;
+            height: 130px;
+            border-radius: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+            color: white;
+            text-align: center;
+            padding: 5px;
+            box-sizing: border-box;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+            transition: transform 0.2s;
+            user-select: none;
+        }
+        .hand-cards .card:hover { transform: translateY(-15px) rotate(-1deg); cursor: pointer; z-index: 10; }
+        
+        .card.red { background-color: #e51c23; }
+        .card.blue { background-color: #1e88e5; }
+        .card.green { background-color: #43a047; }
+        .card.yellow { background-color: #fdd835; color: #000; }
+        .card.wild { background-color: #111111; border: 2px solid #ffffff; }
+        
+        .uno-btn { background-color: #ff9800; }
+        .uno-btn:hover { background-color: #e68a00; }
+    </style>
+</head>
+<body>
+
+    <div id="lobby-screen" class="screen">
+        <h1>UNO: NO MERCY</h1>
+        <div class="subtitle">HHROYALS</div>
+        <div class="form-group">
+            <input type="text" id="player-name" placeholder="Enter Your Name" maxlength="15">
+            <button id="btn-create">Create Room</button>
+        </div>
+        <hr>
+        <div class="form-group">
+            <input type="text" id="room-code-input" placeholder="6-Digit Room Code" maxlength="6">
+            <button id="btn-join">Join Room</button>
+        </div>
+    </div>
+
+    <div id="waiting-screen" class="screen hidden">
+        <h2>Room Code: <span id="display-room-code" style="color: #ff0055;">------</span></h2>
+        <h3>Players Connected (<span id="player-count">0</span>/6):</h3>
+        <ul id="player-list"></ul>
+        <div style="margin-top: 30px;">
+            <button id="btn-start-game" class="hidden">Start Match</button>
+            <p id="waiting-msg">Waiting for the room host to start the game...</p>
+        </div>
+    </div>
+
+    <div id="game-screen" class="screen hidden">
+        <div id="turn-indicator">Connecting to game state...</div>
+        
+        <div id="opponents-area"></div>
+
+        <div class="table-center">
+            <div id="draw-pile" class="card-deck">DRAW<br>DECK</div>
+            <div id="discard-pile" class="card-deck">---</div>
+        </div>
+
+        <div class="player-hand-container">
+            <div id="game-notice"></div> <div class="hand-header">
+                <h3>Your Hand (<span id="hand-count">0</span> cards)</h3>
+                <button id="btn-uno" class="uno-btn">Yell UNO!</button>
+            </div>
+            <div id="player-hand" class="hand-cards"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, doc, setDoc, onSnapshot, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        // ==========================================
+        //  TODO: PLACE YOUR FIREBASE CONFIG HERE
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyCItTQNLLedh_HlulHQ6Z1DMNdjoPa8HOI",
+            authDomain: "uno-test-9a303.firebaseapp.com",
+            projectId: "uno-test-9a303",
+            storageBucket: "uno-test-9a303.firebasestorage.app",
+            messagingSenderId: "364721554270",
+            appId: "1:364721554270:web:bffa947d536eb6a307c5cf"
+        };
+
+        // Initialize App Infrastructure
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Core App Cache
+        let localPlayerName = "";
+        let currentRoomCode = "";
+        let playerId = "";
+        let isHost = false;
+        let gameSession = {};
+        let noticeTimeout = null;
+
+        // DOM Pointers
+        const lobbyScreen = document.getElementById('lobby-screen');
+        const waitingScreen = document.getElementById('waiting-screen');
+        const gameScreen = document.getElementById('game-screen');
+        const gameNotice = document.getElementById('game-notice');
+
+        // Non-blocking Inline Alert Banner Function
+        function showGameNotice(msg) {
+            clearTimeout(noticeTimeout);
+            gameNotice.innerText = msg;
+            gameNotice.style.opacity = "1";
+            noticeTimeout = setTimeout(() => {
+                gameNotice.style.opacity = "0";
+            }, 3000); // Disappears by itself after 3 seconds
+        }
+
+        // --- 1. DECK ENGINE GENERATOR FOR SHOW 'EM NO MERCY ---
+        function buildNoMercyDeck() {
+            const colors = ['red', 'blue', 'green', 'yellow'];
+            let deck = [];
+            
+            colors.forEach(color => {
+                // Numbers 0-9
+                for(let i=0; i<=9; i++) {
+                    deck.push({ id: `${color}_${i}`, color, value: i.toString(), type: 'number' });
+                }
+                // Custom Action Elements
+                deck.push({ id: `${color}_skip`, color, value: 'Skip 🚫', type: 'action' });
+                deck.push({ id: `${color}_reverse`, color, value: 'Reverse 🔄', type: 'action' });
+                deck.push({ id: `${color}_draw2`, color, value: '+2 🃏', type: 'draw', weight: 2 });
+                deck.push({ id: `${color}_draw4`, color, value: '+4 🃏', type: 'draw', weight: 4 });
+                deck.push({ id: `${color}_discardAll`, color, value: 'Discard All 💣', type: 'discardAll' });
+                deck.push({ id: `${color}_skipEvery`, color, value: 'Skip All 💥', type: 'skipEveryone' });
+                deck.push({ id: `${color}_swap7`, color, value: '7 Swap 🔃', type: 'swap7' });
+            });
+
+            // Extreme Wild Additions
+            for(let i=0; i<4; i++) {
+                deck.push({ id: `wild_rev4_${i}`, color: 'wild', value: 'Wild Rev +4 🔄', type: 'wildDraw', weight: 4 });
+                deck.push({ id: `wild_d6_${i}`, color: 'wild', value: 'Wild +6 💀', type: 'wildDraw', weight: 6 });
+                deck.push({ id: `wild_d10_${i}`, color: 'wild', value: 'Wild +10 ❌', type: 'wildDraw', weight: 10 });
+                deck.push({ id: `wild_roul_${i}`, color: 'wild', value: 'Roulette 🎡', type: 'roulette' });
+            }
+            return deck.sort(() => Math.random() - 0.5);
+        }
+
+        // --- 2. MULTIPLAYER NETWORKING & ROOM INTERFACE ---
+        document.getElementById('btn-create').addEventListener('click', async () => {
+            localPlayerName = document.getElementById('player-name').value.trim();
+            if(!localPlayerName) return alert("Please enter a display name!");
+            
+            currentRoomCode = Math.floor(100000 + Math.random() * 900000).toString();
+            playerId = "usr_" + Math.random().toString(36).substring(2, 9);
+            isHost = true;
+
+            const initialSetup = {
+                roomCode: currentRoomCode,
+                status: "waiting",
+                playersOrder: [playerId],
+                activeTurnIndex: 0,
+                direction: 1, 
+                deck: buildNoMercyDeck(),
+                discardPile: [],
+                penaltyStack: 0, 
+                players: {
+                    [playerId]: { name: localPlayerName, hand: [], status: "active", yelledUno: false }
+                }
+            };
+
+            await setDoc(doc(db, "rooms", currentRoomCode), initialSetup);
+            initRealtimeSync(currentRoomCode);
+            switchView(waitingScreen);
+            document.getElementById('btn-start-game').classList.remove('hidden');
+            document.getElementById('waiting-msg').classList.add('hidden');
+        });
+
+        document.getElementById('btn-join').addEventListener('click', async () => {
+            localPlayerName = document.getElementById('player-name').value.trim();
+            const targetCode = document.getElementById('room-code-input').value.trim();
+            if(!localPlayerName || !targetCode) return alert("Fill in both Name and Room Code fields!");
+
+            playerId = "usr_" + Math.random().toString(36).substring(2, 9);
+            currentRoomCode = targetCode;
+            isHost = false;
+
+            const rRef = doc(db, "rooms", currentRoomCode);
+            const snapshot = await getDoc(rRef);
+
+            if(!snapshot.exists()) return alert("Room code not found!");
+            let state = snapshot.data();
+            if(state.playersOrder.length >= 6) return alert("This room is full (Max 6 players)!");
+            if(state.status !== "waiting") return alert("Game already in progress!");
+
+            state.playersOrder.push(playerId);
+            state.players[playerId] = { name: localPlayerName, hand: [], status: "active", yelledUno: false };
+
+            await setDoc(rRef, state);
+            initRealtimeSync(currentRoomCode);
+            switchView(waitingScreen);
+        });
+
+        document.getElementById('btn-start-game').addEventListener('click', async () => {
+            if(gameSession.playersOrder.length < 3) return alert("Minimum 3 members required to play!");
+            
+            let currentDeck = [...gameSession.deck];
+            let roomPlayers = { ...gameSession.players };
+
+            // Deal 7 starting cards to each connected client
+            gameSession.playersOrder.forEach(pId => {
+                roomPlayers[pId].hand = currentDeck.splice(0, 7);
+            });
+
+            // Generate initial valid face-up discard tile
+            let firstDiscard = currentDeck.pop();
+            while(firstDiscard.color === 'wild') {
+                currentDeck.unshift(firstDiscard);
+                firstDiscard = currentDeck.pop();
+            }
+
+            await updateDoc(doc(db, "rooms", currentRoomCode), {
+                status: "playing",
+                deck: currentDeck,
+                discardPile: [firstDiscard],
+                players: roomPlayers
+            });
+        });
+
+        // --- 3. STREAM SYNC ENGINE ---
+        function initRealtimeSync(code) {
+            onSnapshot(doc(db, "rooms", code), (snapshot) => {
+                if (!snapshot.exists()) return;
+                gameSession = snapshot.data();
+                renderPipeline();
+            });
+        }
+
+        function switchView(targetScreen) {
+            [lobbyScreen, waitingScreen, gameScreen].forEach(s => s.classList.add('hidden'));
+            targetScreen.classList.remove('hidden');
+        }
+
+        // --- 4. GRAPHICS RENDERING PIPELINE ---
+        function renderPipeline() {
+            document.getElementById('display-room-code').innerText = gameSession.roomCode;
+            document.getElementById('player-count').innerText = gameSession.playersOrder.length;
+
+            // --- STATE: WAITING IN LOBBY ---
+            if (gameSession.status === "waiting") {
+                const list = document.getElementById('player-list');
+                list.innerHTML = "";
+                gameSession.playersOrder.forEach(pId => {
+                    list.innerHTML += `<li>${gameSession.players[pId].name} ${pId === gameSession.playersOrder[0] ? '👑 (Host)' : ''}</li>`;
+                });
+            }
+
+            // --- STATE: GAME OVER / MATCH ENDED ---
+            if (gameSession.status === "ended") {
+                switchView(gameScreen);
+                
+                // Find the glorious winner
+                let winnerName = "Someone";
+                Object.keys(gameSession.players).forEach(pId => {
+                    if (gameSession.players[pId].hand.length === 0) {
+                        winnerName = gameSession.players[pId].name;
+                    }
+                });
+
+                // Overwrite turn indicator and clear the table board cleanly
+                document.getElementById('turn-indicator').innerHTML = `🎉 <strong>GAME OVER! ${winnerName.toUpperCase()} HAS WON THE MATCH!</strong> 🎉`;
+                document.getElementById('opponents-area').innerHTML = `<h3>Thank you for playing UNO: No Mercy!</h3>`;
+                document.getElementById('player-hand').innerHTML = "";
+                
+                // Disable drawing interaction entirely
+                document.getElementById('draw-pile').onclick = null;
+                return; // Stop processing further game ticks
+            }
+
+            // --- STATE: ACTIVE MATCH PLAYING ---
+            if (gameSession.status === "playing") {
+                switchView(gameScreen);
+                
+                const activeId = gameSession.playersOrder[gameSession.activeTurnIndex];
+                const isMyTurn = (activeId === playerId);
+                const iAmEliminated = (gameSession.players[playerId].status === "eliminated");
+                
+                // 1. Build Turn Indicator Text
+                let turnText = "";
+                if (iAmEliminated) {
+                    turnText = `👻 SPECTATOR MODE: You were eliminated. Watching: ${gameSession.players[activeId].name}`;
+                } else {
+                    turnText = isMyTurn ? "YOUR TURN! Play a card." : `Waiting for: ${gameSession.players[activeId].name}`;
+                    if (gameSession.penaltyStack > 0) {
+                        turnText += ` ⚠️ STACK WARNING: Draw Penalty is at +${gameSession.penaltyStack}! Play match or face the deck!`;
+                    }
+                }
+                document.getElementById('turn-indicator').innerText = turnText;
+
+                // 2. Update Discard Pile Card Graphics
+                const topCard = gameSession.discardPile[gameSession.discardPile.length - 1];
+                const discardDiv = document.getElementById('discard-pile');
+                discardDiv.className = `card-deck card ${topCard.color}`;
+                discardDiv.innerHTML = `<strong>${topCard.value}</strong>`;
+
+                // 3. Update Status Panels of other players
+                const oppArea = document.getElementById('opponents-area');
+                oppArea.innerHTML = "";
+                gameSession.playersOrder.forEach(pId => {
+                    if(pId !== playerId) {
+                        const info = gameSession.players[pId];
+                        const isHisTurn = (pId === activeId);
+                        
+                        // Generate visual card backs for the opponent's hand if active
+                        let opponentCardsHTML = '<div style="display: flex; gap: -15px; justify-content: center; margin-top: 10px; flex-wrap: wrap; padding: 0 10px;">';
+                        info.hand.forEach(() => {
+                            opponentCardsHTML += `
+                                <div class="card" style="width: 40px; height: 60px; background: #0b0b0d; border: 2px solid #ff0055; color: #ff0055; font-size: 0.5rem; padding: 2px; border-radius: 5px; box-shadow: -2px 2px 4px rgba(0,0,0,0.5); pointer-events: none; display: flex; flex-direction: column; justify-content: center; align-items: center; font-weight: bold;">
+                                    <span style="transform: rotate(-20deg); font-size: 0.55rem; letter-spacing: 0.5px;">UNO</span>
+                                </div>
+                            `;
+                        });
+                        opponentCardsHTML += '</div>';
+
+                        oppArea.innerHTML += `
+                            <div class="opponent-status ${isHisTurn ? 'active-turn' : ''} ${info.status === 'eliminated' ? 'eliminated' : ''}" style="min-width: 160px; max-width: 240px;">
+                                <strong>${info.name}</strong>: ${info.status === 'eliminated' ? 'DEAD ❌' : info.hand.length + ' Cards'} ${info.yelledUno ? '📢 (UNO!)' : ''}
+                                ${info.status !== 'eliminated' ? opponentCardsHTML : ''}
+                            </div>
+                        `;
+                    }
+                });
+
+                // 4. Display Client Hand Graphics
+                const handContainer = document.getElementById('player-hand');
+                handContainer.innerHTML = "";
+                const localHand = gameSession.players[playerId].hand;
+                document.getElementById('hand-count').innerText = localHand.length;
+
+                // 25 Cards Mercy Elimination check
+                if(localHand.length >= 25 && gameSession.players[playerId].status === "active") {
+                    triggerMercyElimination();
+                    return;
+                }
+
+                // Render hand if the player is alive; if dead, show elimination text
+                if (iAmEliminated) {
+                    handContainer.innerHTML = `<div style="color: #ff3333; font-weight: bold; font-size: 1.2rem; margin: 20px 0;">❌ YOU HAVE BEEN ELIMINATED BY MERCY RULE ❌</div>`;
+                } else {
+                    localHand.forEach((card, index) => {
+                        const cardEl = document.createElement('div');
+                        cardEl.className = `card ${card.color}`;
+                        cardEl.innerHTML = `<span>${card.value}</span>`;
+                        
+                        // Only let them click if it's their turn AND they are not dead
+                        if(isMyTurn) {
+                            cardEl.onclick = () => processCardMove(card, index);
+                        }
+                        handContainer.appendChild(cardEl);
+                    });
+                }
+            }
+        }
+
+        // --- 5. ACTION SYSTEM RULES EXECUTION ENGINE ---
+        async function processCardMove(card, index) {
+            const topCard = gameSession.discardPile[gameSession.discardPile.length - 1];
+            
+            // Stacking Override Evaluation
+            if(gameSession.penaltyStack > 0 && card.type !== 'draw' && card.type !== 'wildDraw') {
+                showGameNotice("Wrong card! You must counter with a draw card or hit the deck.");
+                return;
+            }
+
+            // Standard Match Check Logic (Color, Content, or Wild status)
+            let isValid = (card.color === topCard.color || card.value === topCard.value || card.color === 'wild');
+            if(!isValid) {
+                showGameNotice("Wrong card! Attributes (color or symbols) do not match.");
+                return;
+            }
+
+            // WILD CARD COLOR CHOICE INTERACTION FIX
+            let cardColorToPlay = card.color;
+            if(card.color === 'wild') {
+                let choice = prompt("Choose a Color! Type: r (Red), b (Blue), g (Green), y (Yellow)").toLowerCase().trim();
+                if(choice === 'r') cardColorToPlay = 'red';
+                else if(choice === 'b') cardColorToPlay = 'blue';
+                else if(choice === 'g') cardColorToPlay = 'green';
+                else if(choice === 'y') cardColorToPlay = 'yellow';
+                else {
+                    showGameNotice("Invalid color selected! Card play cancelled.");
+                    return;
+                }
+            }
+
+            let localHand = [...gameSession.players[playerId].hand];
+            let allPlayers = { ...gameSession.players };
+            let newDiscard = [...gameSession.discardPile];
+            
+            let nextStack = gameSession.penaltyStack;
+            let currentDir = gameSession.direction;
+
+            // --- CUSTOM LOGIC: DISCARD ALL 💣 ---
+            if (card.type === 'discardAll') {
+                const targetColor = card.color;
+                localHand.splice(index, 1); 
+                
+                let cardsToKeep = [];
+                localHand.forEach(c => {
+                    if (c.color === targetColor) {
+                        newDiscard.push({ ...c }); 
+                    } else {
+                        cardsToKeep.push(c); 
+                    }
+                });
+                
+                newDiscard.push({ ...card });
+                localHand = cardsToKeep;
+                
+            } else {
+                localHand.splice(index, 1);
+                let cardInstance = { ...card, color: cardColorToPlay };
+                newDiscard.push(cardInstance);
+            }
+
+            allPlayers[playerId].hand = localHand;
+            allPlayers[playerId].yelledUno = false;
+
+            // --- CUSTOM LOGIC: 7 SWAP 🔃 ---
+            if (card.type === 'swap7') {
+                let opponents = gameSession.playersOrder.filter(pId => pId !== playerId && allPlayers[pId].status !== 'eliminated');
+                
+                if (opponents.length > 0) {
+                    let promptMsg = "Choose a player to swap hands with:\n";
+                    opponents.forEach((pId, idx) => {
+                        promptMsg += `${idx + 1}. ${allPlayers[pId].name} (${allPlayers[pId].hand.length} cards)\n`;
+                    });
+                    
+                    let choiceIdx = parseInt(prompt(promptMsg), 10) - 1;
+                    if (!isNaN(choiceIdx) && choiceIdx >= 0 && choiceIdx < opponents.length) {
+                        let targetPlayerId = opponents[choiceIdx];
+                        
+                        let myNewHand = [...allPlayers[targetPlayerId].hand];
+                        let theirNewHand = [...localHand];
+                        
+                        allPlayers[playerId].hand = myNewHand;
+                        allPlayers[targetPlayerId].hand = theirNewHand;
+                        
+                        localHand = myNewHand; 
+                        alert(`Swapped hands with ${allPlayers[targetPlayerId].name}!`);
+                    } else {
+                        showGameNotice("Invalid player choice selected! Defaulting to no swap execution.");
+                    }
+                }
+            }
+
+            // Calculation weights for Penalties & Direction Modifiers
+            if(card.type === 'draw' || card.type === 'wildDraw') {
+                nextStack += card.weight;
+            }
+
+            if(card.value.includes('Reverse')) {
+                currentDir *= -1;
+            }
+
+            // Determine turn migration index pointer
+            let nextIdx = calculateNextActivePlayerIndex(gameSession.activeTurnIndex, currentDir, card);
+
+            // Win condition evaluator check
+            if(localHand.length === 0) {
+                alert(`CONGRATULATIONS! ${allPlayers[playerId].name} played their final card and won! 🎉`);
+                await updateDoc(doc(db, "rooms", currentRoomCode), { status: "ended" });
+                return;
+            }
+
+            // Global State Database Synchronization Write
+            await updateDoc(doc(db, "rooms", currentRoomCode), {
+                discardPile: newDiscard,
+                players: allPlayers,
+                activeTurnIndex: nextIdx,
+                penaltyStack: nextStack,
+                direction: currentDir
+            });
+        }
+
+        // Hit Draw Pile Action Function (Reshuffles automatically if empty)
+        document.getElementById('draw-pile').addEventListener('click', async () => {
+            const currentTurnId = gameSession.playersOrder[gameSession.activeTurnIndex];
+            if(currentTurnId !== playerId) {
+                showGameNotice("It's not your turn!");
+                return;
+            }
+
+            let currentDeck = [...gameSession.deck];
+            let currentDiscard = [...gameSession.discardPile];
+            let localHand = [...gameSession.players[playerId].hand];
+            let allPlayers = { ...gameSession.players };
+            let nextStack = gameSession.penaltyStack;
+
+            let totalCardsToDraw = nextStack > 0 ? nextStack : 1;
+            
+            // --- AUTO RESHUFFLE ENGINE ---
+            if (currentDeck.length < totalCardsToDraw) {
+                let topFaceUpCard = currentDiscard.pop();
+                let discardedCardsToShuffle = currentDiscard;
+                
+                for (let i = discardedCardsToShuffle.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [discardedCardsToShuffle[i], discardedCardsToShuffle[j]] = [discardedCardsToShuffle[j], discardedCardsToShuffle[i]];
+                }
+                
+                currentDeck = [...discardedCardsToShuffle, ...currentDeck];
+                currentDiscard = [topFaceUpCard];
+                showGameNotice("Draw deck was empty! Discard pile has been reshuffled.");
+            }
+
+            if (currentDeck.length < totalCardsToDraw) {
+                showGameNotice("Absolute deadlock! Every single card is currently held in player hands.");
+                return;
+            }
+
+            for(let i=0; i<totalCardsToDraw; i++) {
+                localHand.push(currentDeck.pop());
+            }
+
+            allPlayers[playerId].hand = localHand;
+            nextStack = 0; 
+
+            let nextIdx = calculateNextActivePlayerIndex(gameSession.activeTurnIndex, gameSession.direction, null);
+
+            await updateDoc(doc(db, "rooms", currentRoomCode), {
+                deck: currentDeck,
+                discardPile: currentDiscard,
+                players: allPlayers,
+                penaltyStack: nextStack,
+                activeTurnIndex: nextIdx
+            });
+        });
+
+        // Yell UNO Verification Action
+        document.getElementById('btn-uno').addEventListener('click', async () => {
+            if(gameSession.players[playerId].hand.length !== 1) {
+                showGameNotice("You can only call UNO when holding exactly 1 card!");
+                return;
+            }
+            
+            let allPlayers = { ...gameSession.players };
+            allPlayers[playerId].yelledUno = true;
+            
+            await updateDoc(doc(db, "rooms", currentRoomCode), { players: allPlayers });
+            showGameNotice("You successfully shouted UNO! 📢");
+        });
+
+        // Handle Index Jump Step Operations
+        function calculateNextActivePlayerIndex(currentIndex, currentDir, card) {
+            let totalPlayers = gameSession.playersOrder.length;
+            let step = currentDir;
+
+            if(card && card.value.includes('Skip 🚫')) {
+                step = currentDir * 2; 
+            } else if (card && card.value.includes('Skip All 💥')) {
+                return currentIndex; 
+            }
+
+            let candidateIndex = (currentIndex + step + totalPlayers) % totalPlayers;
+            
+            while(gameSession.players[gameSession.playersOrder[candidateIndex]].status === "eliminated") {
+                candidateIndex = (candidateIndex + currentDir + totalPlayers) % totalPlayers;
+            }
+            return candidateIndex;
+        }
+
+        async function triggerMercyElimination() {
+            let allPlayers = { ...gameSession.players };
+            allPlayers[playerId].status = "eliminated";
+            alert("MERCY ELIMINATION RULE TRIGGERED! You crossed 25 cards and are out of the game!");
+            
+            let nextIdx = calculateNextActivePlayerIndex(gameSession.activeTurnIndex, gameSession.direction, null);
+
+            await updateDoc(doc(db, "rooms", currentRoomCode), { 
+                players: allPlayers,
+                activeTurnIndex: nextIdx
+            });
+        }
+    </script>
+</body>
+</html>
