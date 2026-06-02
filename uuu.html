@@ -226,9 +226,6 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getFirestore, doc, setDoc, onSnapshot, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // ==========================================
-        //  TODO: PLACE YOUR FIREBASE CONFIG HERE
-        // ==========================================
         const firebaseConfig = {
             apiKey: "AIzaSyCItTQNLLedh_HlulHQ6Z1DMNdjoPa8HOI",
             authDomain: "uno-test-9a303.firebaseapp.com",
@@ -238,11 +235,9 @@
             appId: "1:364721554270:web:bffa947d536eb6a307c5cf"
         };
 
-        // Initialize App Infrastructure
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        // Core App Cache
         let localPlayerName = "";
         let currentRoomCode = "";
         let playerId = "";
@@ -250,33 +245,28 @@
         let gameSession = {};
         let noticeTimeout = null;
 
-        // DOM Pointers
         const lobbyScreen = document.getElementById('lobby-screen');
         const waitingScreen = document.getElementById('waiting-screen');
         const gameScreen = document.getElementById('game-screen');
         const gameNotice = document.getElementById('game-notice');
 
-        // Non-blocking Inline Alert Banner Function
         function showGameNotice(msg) {
             clearTimeout(noticeTimeout);
             gameNotice.innerText = msg;
             gameNotice.style.opacity = "1";
             noticeTimeout = setTimeout(() => {
                 gameNotice.style.opacity = "0";
-            }, 3000); // Disappears by itself after 3 seconds
+            }, 3000);
         }
 
-        // --- 1. DECK ENGINE GENERATOR FOR SHOW 'EM NO MERCY ---
         function buildNoMercyDeck() {
             const colors = ['red', 'blue', 'green', 'yellow'];
             let deck = [];
             
             colors.forEach(color => {
-                // Numbers 0-9
                 for(let i=0; i<=9; i++) {
                     deck.push({ id: `${color}_${i}`, color, value: i.toString(), type: 'number' });
                 }
-                // Custom Action Elements
                 deck.push({ id: `${color}_skip`, color, value: 'Skip 🚫', type: 'action' });
                 deck.push({ id: `${color}_reverse`, color, value: 'Reverse 🔄', type: 'action' });
                 deck.push({ id: `${color}_draw2`, color, value: '+2 🃏', type: 'draw', weight: 2 });
@@ -286,7 +276,6 @@
                 deck.push({ id: `${color}_swap7`, color, value: '7 Swap 🔃', type: 'swap7' });
             });
 
-            // Extreme Wild Additions
             for(let i=0; i<4; i++) {
                 deck.push({ id: `wild_rev4_${i}`, color: 'wild', value: 'Wild Rev +4 🔄', type: 'wildDraw', weight: 4 });
                 deck.push({ id: `wild_d6_${i}`, color: 'wild', value: 'Wild +6 💀', type: 'wildDraw', weight: 6 });
@@ -296,7 +285,6 @@
             return deck.sort(() => Math.random() - 0.5);
         }
 
-        // --- 2. MULTIPLAYER NETWORKING & ROOM INTERFACE ---
         document.getElementById('btn-create').addEventListener('click', async () => {
             localPlayerName = document.getElementById('player-name').value.trim();
             if(!localPlayerName) return alert("Please enter a display name!");
@@ -357,12 +345,10 @@
             let currentDeck = [...gameSession.deck];
             let roomPlayers = { ...gameSession.players };
 
-            // Deal 7 starting cards to each connected client
             gameSession.playersOrder.forEach(pId => {
                 roomPlayers[pId].hand = currentDeck.splice(0, 7);
             });
 
-            // Generate initial valid face-up discard tile
             let firstDiscard = currentDeck.pop();
             while(firstDiscard.color === 'wild') {
                 currentDeck.unshift(firstDiscard);
@@ -377,7 +363,6 @@
             });
         });
 
-        // --- 3. STREAM SYNC ENGINE ---
         function initRealtimeSync(code) {
             onSnapshot(doc(db, "rooms", code), (snapshot) => {
                 if (!snapshot.exists()) return;
@@ -392,12 +377,10 @@
         }
 
         // --- 4. GRAPHICS RENDERING PIPELINE ---
-        // --- 4. GRAPHICS RENDERING PIPELINE ---
         function renderPipeline() {
             document.getElementById('display-room-code').innerText = gameSession.roomCode;
             document.getElementById('player-count').innerText = gameSession.playersOrder.length;
 
-            // --- STATE: WAITING IN LOBBY ---
             if (gameSession.status === "waiting") {
                 const list = document.getElementById('player-list');
                 list.innerHTML = "";
@@ -406,20 +389,16 @@
                 });
             }
 
-            // --- DEEP CHECK: LAST MAN STANDING DETECTION ---
             if (gameSession.status === "playing") {
                 let activePlayers = gameSession.playersOrder.filter(pId => gameSession.players[pId].status === "active");
                 if (activePlayers.length === 1 && gameSession.status !== "ended") {
-                    // Force state transition to ended locally to prevent layout flickering
                     gameSession.status = "ended"; 
                 }
             }
 
-            // --- STATE: GAME OVER / MATCH ENDED ---
             if (gameSession.status === "ended") {
                 switchView(gameScreen);
                 
-                // Find the glorious winner (Either 0 cards OR the only survivor left alive)
                 let winnerName = "Someone";
                 let survivor = gameSession.playersOrder.filter(pId => gameSession.players[pId].status === "active");
                 
@@ -427,23 +406,19 @@
                     winnerName = gameSession.players[survivor[0]].name;
                 } else {
                     Object.keys(gameSession.players).forEach(pId => {
-                        if (gameSession.players[pId].hand.length === 0) {
+                        if (gameSession.players[pId].hand && gameSession.players[pId].hand.length === 0) {
                             winnerName = gameSession.players[pId].name;
                         }
                     });
                 }
 
-                // Overwrite turn indicator and clear the table board cleanly
-                document.getElementById('turn-indicator').innerHTML = `🎉 <strong>GAME OVER! ${winnerName.toUpperCase()} IS THE LAST SURVIVOR AND WINS THE MATCH!</strong> 🎉`;
+                document.getElementById('turn-indicator').innerHTML = `🎉 <strong>GAME OVER! ${winnerName.toUpperCase()} HAS WON THE MATCH!</strong> 🎉`;
                 document.getElementById('opponents-area').innerHTML = `<h3>Thank you for playing UNO: No Mercy!</h3>`;
                 document.getElementById('player-hand').innerHTML = "";
-                
-                // Disable drawing interaction entirely
                 document.getElementById('draw-pile').onclick = null;
-                return; // Stop processing further game ticks
+                return;
             }
 
-            // --- STATE: ACTIVE MATCH PLAYING ---
             if (gameSession.status === "playing") {
                 switchView(gameScreen);
                 
@@ -451,7 +426,6 @@
                 const isMyTurn = (activeId === playerId);
                 const iAmEliminated = (gameSession.players[playerId].status === "eliminated");
                 
-                // 1. Build Turn Indicator Text
                 let turnText = "";
                 if (iAmEliminated) {
                     turnText = `👻 SPECTATOR MODE: You were eliminated. Watching: ${gameSession.players[activeId].name}`;
@@ -463,13 +437,11 @@
                 }
                 document.getElementById('turn-indicator').innerText = turnText;
 
-                // 2. Update Discard Pile Card Graphics
                 const topCard = gameSession.discardPile[gameSession.discardPile.length - 1];
                 const discardDiv = document.getElementById('discard-pile');
                 discardDiv.className = `card-deck card ${topCard.color}`;
                 discardDiv.innerHTML = `<strong>${topCard.value}</strong>`;
 
-                // 3. Update Status Panels of other players
                 const oppArea = document.getElementById('opponents-area');
                 oppArea.innerHTML = "";
                 gameSession.playersOrder.forEach(pId => {
@@ -477,15 +449,16 @@
                         const info = gameSession.players[pId];
                         const isHisTurn = (pId === activeId);
                         
-                        // Generate visual card backs for the opponent's hand if active
                         let opponentCardsHTML = '<div style="display: flex; gap: -15px; justify-content: center; margin-top: 10px; flex-wrap: wrap; padding: 0 10px;">';
-                        info.hand.forEach(() => {
-                            opponentCardsHTML += `
-                                <div class="card" style="width: 40px; height: 60px; background: #0b0b0d; border: 2px solid #ff0055; color: #ff0055; font-size: 0.5rem; padding: 2px; border-radius: 5px; box-shadow: -2px 2px 4px rgba(0,0,0,0.5); pointer-events: none; display: flex; flex-direction: column; justify-content: center; align-items: center; font-weight: bold;">
-                                    <span style="transform: rotate(-20deg); font-size: 0.55rem; letter-spacing: 0.5px;">UNO</span>
-                                </div>
-                            `;
-                        });
+                        if (info.hand) {
+                            info.hand.forEach(() => {
+                                opponentCardsHTML += `
+                                    <div class="card" style="width: 40px; height: 60px; background: #0b0b0d; border: 2px solid #ff0055; color: #ff0055; font-size: 0.5rem; padding: 2px; border-radius: 5px; box-shadow: -2px 2px 4px rgba(0,0,0,0.5); pointer-events: none; display: flex; flex-direction: column; justify-content: center; align-items: center; font-weight: bold;">
+                                        <span style="transform: rotate(-20deg); font-size: 0.55rem; letter-spacing: 0.5px;">UNO</span>
+                                    </div>
+                                `;
+                            });
+                        }
                         opponentCardsHTML += '</div>';
 
                         oppArea.innerHTML += `
@@ -497,28 +470,19 @@
                     }
                 });
 
-                // 4. Display Client Hand Graphics
                 const handContainer = document.getElementById('player-hand');
                 handContainer.innerHTML = "";
                 const localHand = gameSession.players[playerId].hand;
-                document.getElementById('hand-count').innerText = localHand.length;
+                document.getElementById('hand-count').innerText = localHand ? localHand.length : 0;
 
-                // 25 Cards Mercy Elimination check
-                if(localHand.length >= 25 && gameSession.players[playerId].status === "active") {
-                    triggerMercyElimination();
-                    return;
-                }
-
-                // Render hand if the player is alive; if dead, show elimination text
                 if (iAmEliminated) {
                     handContainer.innerHTML = `<div style="color: #ff3333; font-weight: bold; font-size: 1.2rem; margin: 20px 0;">❌ YOU HAVE BEEN ELIMINATED BY MERCY RULE ❌</div>`;
-                } else {
+                } else if (localHand) {
                     localHand.forEach((card, index) => {
                         const cardEl = document.createElement('div');
                         cardEl.className = `card ${card.color}`;
                         cardEl.innerHTML = `<span>${card.value}</span>`;
                         
-                        // Only let them click if it's their turn AND they are not dead
                         if(isMyTurn) {
                             cardEl.onclick = () => processCardMove(card, index);
                         }
@@ -529,24 +493,20 @@
         }
 
         // --- 5. ACTION SYSTEM RULES EXECUTION ENGINE ---
-        // --- 5. ACTION SYSTEM RULES EXECUTION ENGINE ---
         async function processCardMove(card, index) {
             const topCard = gameSession.discardPile[gameSession.discardPile.length - 1];
             
-            // 1. Stacking Override Evaluation (Crucial for No Mercy Stacking Rules)
             if(gameSession.penaltyStack > 0 && card.type !== 'draw' && card.type !== 'wildDraw') {
                 showGameNotice("Wrong card! You must counter with a stacking draw card or hit the deck.");
                 return;
             }
 
-            // 2. Standard Match Check Logic (Deep Fixed to explicitly allow Wild play on top of assigned colors)
             let isValid = (card.color === topCard.color || card.value === topCard.value || card.color === 'wild' || topCard.color === 'wild');
             if(!isValid) {
                 showGameNotice("Wrong card! Attributes (color or symbols) do not match.");
                 return;
             }
 
-            // 3. Setup mutable operational states
             let localHand = [...gameSession.players[playerId].hand];
             let allPlayers = { ...gameSession.players };
             let newDiscard = [...gameSession.discardPile];
@@ -555,75 +515,62 @@
             let currentDir = gameSession.direction;
             let activeColorSelection = card.color;
 
-            // Remove the card from the player's hand array up-front
             localHand.splice(index, 1);
 
-            // --- DEEP IMPLEMENTATION: ROULETTE WHEEL ENGINE 🎡 ---
+            // --- DEEP IMPLEMENTATION: AUTOMATIC NEXT-PLAYER ROULETTE WHEEL ENGINE ---
             if (card.type === 'roulette') {
-                // Determine victims still alive inside the room boundary
-                let targets = gameSession.playersOrder.filter(pId => pId !== playerId && allPlayers[pId].status !== 'eliminated');
+                // Determine next player index dynamically based on current game direction
+                let totalPlayers = gameSession.playersOrder.length;
+                let targetIdx = (gameSession.activeTurnIndex + currentDir + totalPlayers) % totalPlayers;
                 
-                if (targets.length > 0) {
-                    let promptMsg = "🎡 ROULETTE! Choose an opponent to spin the wheel:\n";
-                    targets.forEach((pId, idx) => {
-                        promptMsg += `${idx + 1}. ${allPlayers[pId].name} (${allPlayers[pId].hand.length} cards)\n`;
-                    });
-                    
-                    let choiceIdx = parseInt(prompt(promptMsg), 10) - 1;
-                    if (!isNaN(choiceIdx) && choiceIdx >= 0 && choiceIdx < targets.length) {
-                        let targetPlayerId = targets[choiceIdx];
-                        let targetHand = [...allPlayers[targetPlayerId].hand];
-                        let serverDeck = [...gameSession.deck];
-                        
-                        // Prompt player for a target color the victim has to draw for
-                        let targetColorChoice = prompt("Choose the trigger color for the Roulette! Type: r (Red), b (Blue), g (Green), y (Yellow)").toLowerCase().trim();
-                        let triggerColor = 'red';
-                        if(targetColorChoice === 'b') triggerColor = 'blue';
-                        else if(targetColorChoice === 'g') triggerColor = 'green';
-                        else if(targetColorChoice === 'y') triggerColor = 'yellow';
+                // Skip eliminated opponents to find the next active survivor
+                while(allPlayers[gameSession.playersOrder[targetIdx]].status === "eliminated") {
+                    targetIdx = (targetIdx + currentDir + totalPlayers) % totalPlayers;
+                }
+                
+                let targetPlayerId = gameSession.playersOrder[targetIdx];
+                let targetHand = [...allPlayers[targetPlayerId].hand];
+                let serverDeck = [...gameSession.deck];
+                
+                let targetColorChoice = prompt(`🎡 ROULETTE triggered automatically on next player: ${allPlayers[targetPlayerId].name}!\nChoose the target trigger color: Type r (Red), b (Blue), g (Green), y (Yellow)`).toLowerCase().trim();
+                let triggerColor = 'red';
+                if(targetColorChoice === 'b') triggerColor = 'blue';
+                else if(targetColorChoice === 'g') triggerColor = 'green';
+                else if(targetColorChoice === 'y') triggerColor = 'yellow';
 
-                        alert(`Roulette activated! ${allPlayers[targetPlayerId].name} will draw cards until they pull a ${triggerColor.toUpperCase()} card!`);
-                        
-                        let matched = false;
-                        let cardsDrawnCount = 0;
+                alert(`Roulette spinning! ${allPlayers[targetPlayerId].name} will now draw cards one-by-one until they draw a ${triggerColor.toUpperCase()} card!`);
+                
+                let matched = false;
+                let cardsDrawnCount = 0;
 
-                        // Draw cycle simulation loop
-                        while (!matched && serverDeck.length > 0) {
-                            let drawnCard = serverDeck.pop();
-                            targetHand.push(drawnCard);
-                            cardsDrawnCount++;
+                while (!matched && serverDeck.length > 0) {
+                    let drawnCard = serverDeck.pop();
+                    targetHand.push(drawnCard);
+                    cardsDrawnCount++;
 
-                            if (drawnCard.color === triggerColor) {
-                                matched = true;
-                            }
-
-                            // Dynamic check: Did the continuous draw push them into Mercy Elimination?
-                            if (targetHand.length >= 25) {
-                                break;
-                            }
-                        }
-
-                        // Apply the modified hand back to the server profile instance
-                        allPlayers[targetPlayerId].hand = targetHand;
-                        gameSession.deck = serverDeck; // Synchronize local cache reference
-
-                        if (targetHand.length >= 25) {
-                            allPlayers[targetPlayerId].status = "eliminated";
-                            alert(`💥 ROULETTE DEADSHOT! ${allPlayers[targetPlayerId].name} drew ${cardsDrawnCount} cards, hit ${targetHand.length} total cards, and was ELIMINATED!`);
-                        } else {
-                            alert(`Roulette finished! ${allPlayers[targetPlayerId].name} drew ${cardsDrawnCount} cards before finding a match.`);
-                        }
-                    } else {
-                        showGameNotice("Invalid player choice. Roulette skipped!");
+                    if (drawnCard.color === triggerColor) {
+                        matched = true;
                     }
+
+                    if (targetHand.length >= 25) {
+                        break;
+                    }
+                }
+
+                allPlayers[targetPlayerId].hand = targetHand;
+                gameSession.deck = serverDeck; 
+
+                if (targetHand.length >= 25) {
+                    allPlayers[targetPlayerId].status = "eliminated";
+                    alert(`💥 ROULETTE DEADSHOT! ${allPlayers[targetPlayerId].name} drew ${cardsDrawnCount} cards, crossed 25 total cards, and was ELIMINATED!`);
+                } else {
+                    alert(`Roulette finished! ${allPlayers[targetPlayerId].name} drew ${cardsDrawnCount} cards safely.`);
                 }
             }
 
-            // --- DEEP IMPLEMENTATION: DISCARD ALL 💣 ---
             if (card.type === 'discardAll') {
                 const targetColor = card.color;
                 let cardsToKeep = [];
-                
                 localHand.forEach(c => {
                     if (c.color === targetColor) {
                         newDiscard.push({ ...c }); 
@@ -631,11 +578,9 @@
                         cardsToKeep.push(c); 
                     }
                 });
-                
                 localHand = cardsToKeep;
             }
 
-            // --- DEEP IMPLEMENTATION: 7 SWAP ENGINE 🔃 ---
             if (card.type === 'swap7') {
                 let opponents = gameSession.playersOrder.filter(pId => pId !== playerId && allPlayers[pId].status !== 'eliminated');
                 
@@ -649,14 +594,12 @@
                     if (!isNaN(choiceIdx) && choiceIdx >= 0 && choiceIdx < opponents.length) {
                         let targetPlayerId = opponents[choiceIdx];
                         
-                        // Deep isolate snapshot copies for execution swap
                         let targetHandSnapshot = [...allPlayers[targetPlayerId].hand];
                         let myHandSnapshot = [...localHand];
                         
                         allPlayers[playerId].hand = targetHandSnapshot;
                         allPlayers[targetPlayerId].hand = myHandSnapshot;
                         
-                        // Force update working variables immediately so win evaluations catch it
                         localHand = targetHandSnapshot; 
                         alert(`Hands swapped successfully! You now have ${localHand.length} cards.`);
                     } else {
@@ -665,7 +608,6 @@
                 }
             }
 
-            // --- DEEP IMPLEMENTATION: WILD CARD COLOR SELECTION & REVERSE INTERACTION ---
             if (card.color === 'wild') {
                 let choice = prompt("Choose a Color! Type: r (Red), b (Blue), g (Green), y (Yellow)").toLowerCase().trim();
                 if(choice === 'r') activeColorSelection = 'red';
@@ -678,28 +620,22 @@
                 }
             }
 
-            // Apply modifications to active player state instance blueprints
             allPlayers[playerId].hand = localHand;
             allPlayers[playerId].yelledUno = false;
 
-            // Commit final card design values directly to discard stack
             let finalizedCardInstance = { ...card, color: activeColorSelection };
             newDiscard.push(finalizedCardInstance);
 
-            // Calculation adjustments for stacking draws
             if(card.type === 'draw' || card.type === 'wildDraw') {
                 nextStack += card.weight;
             }
 
-            // Handle standard direction swaps AND Wild Reverse +4 modifications
             if(card.value.includes('Reverse') || card.id.includes('wild_rev4')) {
                 currentDir *= -1;
             }
 
-            // Move the turn marker accurately to the next viable candidate
             let nextIdx = calculateNextActivePlayerIndex(gameSession.activeTurnIndex, currentDir, card);
 
-            // Final check: Did the move cause a win condition right now?
             if(localHand.length === 0) {
                 alert(`CONGRATULATIONS! ${allPlayers[playerId].name} played their final card and won! 🎉`);
                 await updateDoc(doc(db, "rooms", currentRoomCode), { 
@@ -710,8 +646,16 @@
                 return;
             }
 
-            // Global Write State updates to Cloud Firestore database
+            // --- IMMEDIATE RE-EVALUATION FOR LAST MAN STANDING ON ROULETTE DEATH ---
+            let remainingActivePlayers = gameSession.playersOrder.filter(pId => allPlayers[pId].status === "active");
+            let nextStatus = "playing";
+            if (remainingActivePlayers.length === 1) {
+                nextStatus = "ended";
+                alert(`🏆 MATCH OVER! ${allPlayers[remainingActivePlayers[0]].name} is the last survivor and wins!`);
+            }
+
             await updateDoc(doc(db, "rooms", currentRoomCode), {
+                status: nextStatus,
                 deck: gameSession.deck,
                 discardPile: newDiscard,
                 players: allPlayers,
@@ -721,7 +665,7 @@
             });
         }
 
-        // Hit Draw Pile Action Function (Reshuffles automatically if empty)
+        // Hit Draw Pile Action Function
         document.getElementById('draw-pile').addEventListener('click', async () => {
             const currentTurnId = gameSession.playersOrder[gameSession.activeTurnIndex];
             if(currentTurnId !== playerId) {
@@ -737,7 +681,6 @@
 
             let totalCardsToDraw = nextStack > 0 ? nextStack : 1;
             
-            // --- AUTO RESHUFFLE ENGINE ---
             if (currentDeck.length < totalCardsToDraw) {
                 let topFaceUpCard = currentDiscard.pop();
                 let discardedCardsToShuffle = currentDiscard;
@@ -764,9 +707,23 @@
             allPlayers[playerId].hand = localHand;
             nextStack = 0; 
 
+            // --- DEEP INTERCEPT FOR IMMEDIATE 25-CARD EXPULSION ON DRAW ---
+            let nextStatus = "playing";
+            if (localHand.length >= 25) {
+                allPlayers[playerId].status = "eliminated";
+                alert("MERCY ELIMINATION RULE TRIGGERED! You hit or crossed 25 cards and are DEAD! ❌");
+                
+                let survivors = gameSession.playersOrder.filter(pId => allPlayers[pId].status === "active");
+                if (survivors.length === 1) {
+                    nextStatus = "ended";
+                    alert(`🏆 MATCH OVER! ${allPlayers[survivors[0]].name} is the last survivor and wins!`);
+                }
+            }
+
             let nextIdx = calculateNextActivePlayerIndex(gameSession.activeTurnIndex, gameSession.direction, null);
 
             await updateDoc(doc(db, "rooms", currentRoomCode), {
+                status: nextStatus,
                 deck: currentDeck,
                 discardPile: currentDiscard,
                 players: allPlayers,
@@ -775,7 +732,6 @@
             });
         });
 
-        // Yell UNO Verification Action
         document.getElementById('btn-uno').addEventListener('click', async () => {
             if(gameSession.players[playerId].hand.length !== 1) {
                 showGameNotice("You can only call UNO when holding exactly 1 card!");
@@ -789,7 +745,6 @@
             showGameNotice("You successfully shouted UNO! 📢");
         });
 
-        // Handle Index Jump Step Operations
         function calculateNextActivePlayerIndex(currentIndex, currentDir, card) {
             let totalPlayers = gameSession.playersOrder.length;
             let step = currentDir;
@@ -802,13 +757,37 @@
 
             let candidateIndex = (currentIndex + step + totalPlayers) % totalPlayers;
             
-            while(gameSession.players[gameSession.playersOrder[candidateIndex]].status === "eliminated") {
+            // Safety loop to bypass dead players
+            let loopGuard = 0;
+            while(gameSession.players[gameSession.playersOrder[candidateIndex]].status === "eliminated" && loopGuard < totalPlayers) {
                 candidateIndex = (candidateIndex + currentDir + totalPlayers) % totalPlayers;
+                loopGuard++;
             }
             return candidateIndex;
         }
 
-        triggerMercyElimination
+        async function triggerMercyElimination() {
+            let allPlayers = { ...gameSession.players };
+            allPlayers[playerId].status = "eliminated";
+            alert("MERCY ELIMINATION RULE TRIGGERED! You crossed 25 cards and are out of the game!");
+            
+            let remainingActivePlayers = gameSession.playersOrder.filter(pId => allPlayers[pId].status === "active");
+            let nextStatus = "playing";
+
+            if (remainingActivePlayers.length === 1) {
+                nextStatus = "ended";
+                let lastSurvivorId = remainingActivePlayers[0];
+                alert(`🏆 MATCH OVER! ${allPlayers[lastSurvivorId].name} is the last player alive and wins!`);
+            }
+
+            let nextIdx = calculateNextActivePlayerIndex(gameSession.activeTurnIndex, gameSession.direction, null);
+
+            await updateDoc(doc(db, "rooms", currentRoomCode), { 
+                status: nextStatus,
+                players: allPlayers,
+                activeTurnIndex: nextIdx
+            });
+        }
     </script>
 </body>
 </html>
